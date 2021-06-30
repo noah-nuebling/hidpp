@@ -51,15 +51,14 @@ std::vector<uint8_t> Device::callFunction (uint8_t feature_index,
 	debug.printBytes ("Parameters:", param_begin, param_end);
 
 	std::size_t len = std::distance (param_begin, param_end);
-	HIDPP::Report::Type type;
-	if (len <= HIDPP::ShortParamLength)
-		type = HIDPP::Report::Short;
-	else if (len <= HIDPP::LongParamLength)
-		type = HIDPP::Report::Long;
-	else {
+	static constexpr std::array Types = { HIDPP::Report::Short, HIDPP::Report::Long, HIDPP::Report::VeryLong };
+	auto report_info = dispatcher ()->reportInfo ();
+	auto type = std::find_if (Types.begin (), Types.end (), [=] (auto type) {
+			return report_info.hasReport (type) && len <= HIDPP::Report::parameterLength (type);
+	});
+	if (type == Types.end ())
 		throw std::logic_error ("Parameters too long");
-	}
-	HIDPP::Report request (type, deviceIndex (), feature_index, function, softwareID);
+	HIDPP::Report request (*type, deviceIndex (), feature_index, function, softwareID);
 	std::copy (param_begin, param_end, request.parameterBegin ());
 
 	auto response = dispatcher ()->sendCommand (std::move (request))->get ();
