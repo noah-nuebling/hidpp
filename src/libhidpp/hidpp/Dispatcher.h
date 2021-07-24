@@ -23,6 +23,7 @@
 #include <memory>
 #include <map>
 #include <functional>
+#include <optional>
 
 namespace HIDPP
 {
@@ -134,6 +135,13 @@ public:
 			case Report::VeryLong: return flags & HasVeryLongReport;
 			default: return false;
 			}
+		}
+
+		std::optional<Report::Type> findReport (std::size_t minimum_parameter_length = 0) const noexcept {
+			for (auto type: { Report::Short, Report::Long, Report::VeryLong })
+				if (hasReport (type) && minimum_parameter_length <= Report::parameterLength (type))
+					return type;
+			return std::nullopt;
 		}
 	};
 	ReportInfo reportInfo () const noexcept { return _report_info; }
