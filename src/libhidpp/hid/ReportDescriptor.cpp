@@ -244,12 +244,12 @@ ReportDescriptor ReportDescriptor::fromRawData (const uint8_t *data, std::size_t
 				switch (item.get<unsigned int> ()) {
 				case 1:
 					if (delimiter_state != Closed)
-						throw std::runtime_error ("delimieter mismatch");
+						throw std::runtime_error ("delimiter mismatch");
 					delimiter_state = OpenedFirst;
 					break;
 				case 0:
 					if (delimiter_state == Closed)
-						throw std::runtime_error ("delimieter mismatch");
+						throw std::runtime_error ("delimiter mismatch");
 					delimiter_state = Closed;
 					break;
 				default: break;
