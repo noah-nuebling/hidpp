@@ -1,6 +1,6 @@
 /*
  * Copyright 2021 Clément Vuchener
- * Created by Noah Nuebling
+ * File created by Noah Nuebling
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,66 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
+/*
+    Notes/discussion [Feb 2025]
+
+    Investigation: Which APIs / high-level-approach should we use?
+        - The easiest approach would be to use device files in the /dev folder. Then we could probably mostly copy the linux/POSIX implementation. 
+            However, macOS doesn't seem to put hid devices into the /dev folder. (Source: https://stackoverflow.com/a/28405248/10601702)
+        - The next best approach would be to at least copy the 'semantics' of the linux and windows implementations. That means we want to implement the device-communication via raw 
+            USB-reports (implemented by writeReport(), readReport(), interruptRead()) with the same timing and blocking behavior as the linux and windows implementations. (I think everything is just blocking/synchronous in the linux implementation.)
+        - What APIs do we have available for this on macOS?
+            - IOHIDDevice
+                - This is relatively well documented and easy to use.
+                - This has synchronous APIs (IOHIDDeviceGetReport, IOHIDDeviceSetReport) and synchronous APIs with timeouts (IOHIDDeviceGetReportWithCallback, IOHIDDeviceSetReportWithCallback). (The docs say the callback APIs are 'asynchronous', but I think that's a mistake, since they also say that they 'block'.)
+                    - However, the docs explicitly say that these are only 'relevant' for 'output or feature type reports' because of 'sporadic devicesupport for polling input reports'
+                    - The docs tell you to use the runLoop-based asynchronous variant (IOHIDDeviceRegisterInputReportCallback()) for input events instead.
+                    - (Not sure if relevant:) IOHIDDeviceSetReportWithCallback was apparently broken until some recent macOS version (Source: https://stackoverflow.com/a/78495232/10601702).
+                - Problems:
+                    - hidpp's readReport() wants to read input reports synchronously with a timeout, but the only available method for that (IOHIDDeviceGetReportWithCallback) explicitly tells you not to do that.
+                    - I don't see any way at all to implement hidpp's interruptRead() with these APIs.
+                - Solutions:
+                    1. I don't quite understand why Apple's docs say not to use IOHIDDeviceGetReportWithCallback for input reports, even though it seems to work very similarly to linux's read() which is apparently safe. Perhaps the macOS function is also safe for our usecase? TODO: Ask cvuchener what he thinks.
+                    2. Create a separate thread with a runloop and then schedule the asynchronous variant (IOHIDDeviceRegisterInputReportCallback) on that runLoop to receive input-report-interrupts. Then use mutex/semaphore/etc to coordinate with the threads calling hidpp's interface functions: writeReport, readReport and interruptRead.
+                        -> This is what we have sort of implemented as of [Mar 2025]
+                    3. Perhaps we could run the runLoop on the calling thread like (https://stackoverflow.com/a/5878918/10601702) and avoid creating a separate thread.
+                        -> My main worry is that for back-to-back writeReport() and readReport() calls, the readReport() call might start its runLoop too late – after the device has already 'responded' to the written report with an interrupt. (IIRC, we had a similar bug with the runLoop-on-a-separate-thread implementation.)
+                        -> Smaller concern: Is this slower than the 2-threaded solution?
+            - HIDDeviceDeviceInterface
+                - IOHIDDevice uses this under-the-hood (See: https://github.com/opensource-apple/IOKitUser/blob/master/hid.subproj/IOHIDDevice.c#L129)
+                - Don't see a benefit to using this directly over IOHIDDevice.
+            - IOHIDDeviceInterface
+                - Docs say it's the 'primary interface to HID devices'
+                - Found in the IOHIDLibObsolete.h header. So probably deprecated? Not explicitly marked as deprecated, though.
+                - Has a getReport() function with a timeout param.
+                - Sidenote: Function docs are found in the header under 'BEGIN READABLE STRUCTURE DEFINITIONS'
+            - HIDDeviceClient
+                - Swift-only, macOS 15.0+ –> Not usable.
+                - Only seems to have non-blocking functions (such as dispatchGetReportRequest)
+            - IOUSBHostDevice/IOUSBHostInterface
+                - objc interface for low-level communication with USB devices. macOS 10.15+
+                - Seems to support all the semantics that hidpp needs. 
+                - Tested this and could only get it to work for USB connection, not Bluetooth connection. (Tested VXE R1SE+ mouse in objc-tests-nov-2024 repo in [Mar 2025])
+            - IOUSBDeviceInterface
+                - I suspect this also won't work for Bluetooth.
+                - Also see: 
+                    - Used by this Razer driver: https://github.com/1kc/razer-macos/blob/47f2345d32d03d421accd824357709f5bca0d05c/src/driver/razerdevice.c
+                    - Razer driver apparently doesn't support Bluetooth, which confirms our suspicions: https://github.com/1kc/razer-macos/issues/566#issuecomment-1049337637
+
+    Problems I can see with the current implementation [Mar 2025]
+        - We're running a runLoop on a dispatch_queue instead of NSThread. I'm not sure that could lead to problems. IIRC, dispatch_queues don't have autoreleasepools by default, which could lead to memory leaks when using Apple APIs. Also CFRunLoopGetCurrent may return NULL on dispatchQueues other than the main one IIRC. We wrote more about this somewhere in the MMF source code or somewhere else I think.
+        - The 'lookbackThreshold' system seems pretty brittle. Perhaps we could instead ignore any inputReports that occured *before* the last outputReport or do a FIFO queue or something like that? TODO: Perhaps ask cvuchener.
+        - Some of the code is a bit stupid, with the excessive comments, sizeof(uint8_t), etc. Perhaps we should look at the rest of the codebase and adopt the style. (But ask cvuchener before wasting time.)
+        - CFRunLoopRunInMode has a 1000 second timeout. We don't want a timeout. Use CFRunLoopRun instead.
+        - We use an IORegistryEntryID as the device 'path', but IIRC we format it differently than Apple's `hidutil list`. Formatting it the same would be neat.
+        - There are some unsolved TODOs in the code – Mostly around error handling. TODO: Ask cvuchener, how to deal with that or copy the approach you see in the rest of the codebase.
+        - Commit logs are full of random notes, so we need to squash them or something before making a pull request.
+    
+    Also see:
+        - Apple Docs - Introduction to Accessing Hardware From Applications: https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/AccessingHardware/AH_Intro/AH_Intro.html#//apple_ref/doc/uid/TP40002714
+        - The 'macOS support' issue on cvuchener/hidpp: https://github.com/cvuchener/hidpp/issues/17
+*/
 
 #include "RawDevice.h"
 

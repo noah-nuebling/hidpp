@@ -1,6 +1,6 @@
 /*
  * Copyright 2021 Clément Vuchener
- * Created by Noah Nuebling
+ * File created by Noah Nuebling
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

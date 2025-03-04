@@ -1,6 +1,6 @@
 /*
  * Copyright 2021 Clément Vuchener
- * Created by Noah Nuebling
+ * File created by Noah Nuebling
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -176,7 +176,6 @@ std::string Utility_macos::IOHIDDeviceGetDebugIdentifier(IOHIDDeviceRef device) 
 double Utility_macos::timestamp() {
     // Src: https://stackoverflow.com/a/45465312/10601702
     // Returns seconds since January 1st 1970
-
     auto now = std::chrono::system_clock::now();
     auto timeSinceEpoch = std::chrono::duration<double>(now.time_since_epoch()); // Epoch is usually January 1st 1970
     return timeSinceEpoch.count();
