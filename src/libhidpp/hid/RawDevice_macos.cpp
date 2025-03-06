@@ -18,9 +18,9 @@
  */
 
 /*
-    Notes/discussion [Feb 2025]
+    Notes/discussion
 
-    Investigation: Which APIs / high-level-approach should we use?
+    Investigation: Which APIs / high-level-approach should we use? [Mar 5 2025]
         - The easiest approach would be to use device files in the /dev folder. Then we could probably mostly copy the linux/POSIX implementation. 
             However, macOS doesn't seem to put hid devices into the /dev folder. (Source: https://stackoverflow.com/a/28405248/10601702)
         - The next best approach would be to at least copy the 'semantics' of the linux and windows implementations. That means we want to implement the device-communication via raw 
@@ -75,6 +75,53 @@
     Also see:
         - Apple Docs - Introduction to Accessing Hardware From Applications: https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/AccessingHardware/AH_Intro/AH_Intro.html#//apple_ref/doc/uid/TP40002714
         - The 'macOS support' issue on cvuchener/hidpp: https://github.com/cvuchener/hidpp/issues/17
+
+    ---
+
+    Investigation: solaar [Mar 6 2025]
+
+        Background:
+            Solaar is a python GUI app which lets you configure HIDPP devices. 
+            I could run it on my Mac after manually creating a python venv and installing some of the dependencies.
+            It successfully configures my Logitech devices!
+
+        Looking at 'macOS support' Issue (https://github.com/pwr-Solaar/Solaar/issues/1244)
+
+            Low-level backend solutions mentioned:
+
+            - libusb
+                - They have a very detailed and recently updated darwin backend. (https://github.com/libusb/libusb/blob/master/libusb/os/darwin_usb.c)
+                - They use (different versions of) IOUSBInterfaceInterface, and functions like ReadStreamsPipeAsyncTO, WriteStreamsPipeAsyncTO.
+                -> Problem is this probably doesn't support Bluetooth devices.
+                    - However, in examples/xusb.c/display_ps3_status() they do seem to be handling a bluetooth PS3 controller. No clue how that works or if it would be applicable to the hidpp macOS port.
+            - libudev
+                - Is deprecated according to https://man.archlinux.org/man/libudev.3.en
+                - There's a python wrapper: pyudev
+
+            Low-level backend solutions that are mentioned to **not work**
+            - udev
+            -> AFAIK this just refers to the native POSIX way of accessing devices via files inside /user/dev/, but it doesn't work on Windows and macOS. (Discussed above.)
+
+        Looking at 'partial macOS support' pull request (https://github.com/pwr-Solaar/Solaar/pull/1971)
+
+            - They implemented hidapi as their backend.
+            -> This seems really good! See below.
+        
+    Investigation: hidapi (https://github.com/libusb/hidapi)
+        - hidapi has a very detailed and recently-updated macOS backend.
+            - The entire macOS implementation is a single 1500 line c file. It seems very simple and lightweight. 
+                (Linux and windows implementations look similarly lightweight, and it also supports many other platforms.)
+            - They use IOHIDDevice and a separate thread with a runLoop and stuff – just like our hidpp implementation. It looks very similar. (Perhaps we even copied some of the logic (It's been years, I can't remember exactly.))
+                - From what I can see, hidapi supports all the semantics we need for hidpp. 
+                  It seems like a pretty complete implementation. E.g. We planned to replace the `lookBackThreshold` system with an inputReportQueue, and they've already implemented that. [Mar 2025]
+        - Sidenote: I remember I tried hidapi in the very beginning of developing Mac Mouse Fix, but it always 'seized' the mice, causing them to stop working normally. However, hidapi seems to have fixed that now! (In commit https://github.com/libusb/hidapi/commit/05f05882203d10e67dbd899d8d985888ff72eca6)
+        -> I think the hidpp macOS backend would basically just be a (shittier) cpp reimplementation of hidapi.
+
+        -> It looks to me like throwing away the custom backends in hidpp and replacing them with hidapi would be the best solution.
+            TODO: Ask @cvuchener about this.
+
+    Also see: 
+        - This MMF issue where a user pointed me to solaar: https://github.com/noah-nuebling/mac-mouse-fix/issues/1277
 */
 
 #include "RawDevice.h"
