@@ -111,17 +111,75 @@
         - hidapi has a very detailed and recently-updated macOS backend.
             - The entire macOS implementation is a single 1500 line c file. It seems very simple and lightweight. 
                 (Linux and windows implementations look similarly lightweight, and it also supports many other platforms.)
+            - The implementation looks simple and very well-written.
             - They use IOHIDDevice and a separate thread with a runLoop and stuff – just like our hidpp implementation. It looks very similar. (Perhaps we even copied some of the logic (It's been years, I can't remember exactly.))
                 - From what I can see, hidapi supports all the semantics we need for hidpp. 
-                  It seems like a pretty complete implementation. E.g. We planned to replace the `lookBackThreshold` system with an inputReportQueue, and they've already implemented that. [Mar 2025]
+                - It seems like a pretty 'complete' implementation that is better than our implementation in every way. 
+                    - E.g. we planned to replace the `lookBackThreshold` system with an inputReportQueue, and they've already implemented that. [Mar 2025]
+                    - E.g. they have code for robustly handling device-detachment mid operation. Our code didn't consider that at all. 
         - Sidenote: I remember I tried hidapi in the very beginning of developing Mac Mouse Fix, but it always 'seized' the mice, causing them to stop working normally. However, hidapi seems to have fixed that now! (In commit https://github.com/libusb/hidapi/commit/05f05882203d10e67dbd899d8d985888ff72eca6)
-        -> I think the hidpp macOS backend would basically just be a (shittier) cpp reimplementation of hidapi.
 
-        -> It looks to me like throwing away the custom backends in hidpp and replacing them with hidapi would be the best solution.
+    Other libraries
+        libratbag
+            - Also supports non-logitech devices.
+            - Doesn't support macOS, has no plans to add it IIRC. 
+            - Relatively slow to add device support / hid++ protocol featuers. See G Pro X Superlight 2 support which has been request over a year ago: https://github.com/libratbag/libratbag/issues/1572
+        solaar
+            - Not a library and all in python, so perhaps hard to integrate their code into MMF. But has pretty decent device support.
+        hidpp
+            - Best solution in theory. There should be a cross-platform c library for logitech devices. 
+                (Would be even better if there was one lib to support devices from various manufacturers cross-platform, kinda like libratbag.)
+            - Not sure how good device-support / hid++ feature support is specifically.
+
+    Conclusion:
+        I think the hidpp macOS backend would basically just be a (shittier) cpp reimplementation of hidapi.
+        It looks to me like throwing away the custom backends in hidpp and replacing them with hidapi would be the best solution.
             TODO: Ask @cvuchener about this.
+        ORRR: We could implement a new lib in pure C...
+        
+    Investigation: Replace hidpp with pure C lib?
+        I've looked at more of the hidpp source code, and it seems to be relatively complicated and abstracted cpp code with suboptimal abstractions for app development.
+        
+        This might warrant trying to reimplement in pure C on top of hiapi. It might be nice to have a simple, portable, lightweight reference implementation in C for the hidpp protocol that can be reused in several applications or CLTs. Similar to hidapi or cmark.
+        Note: We could perhaps copy some of the logic from the solaar hidpp python code which might be simpler (but I haven't confirmed that)
 
-    Also see: 
+        To come to the conclusion that cvuchener/hidpp might be a bit abstracted/suboptimal for application development, I looked at:
+            - hidpp20-raw-touchpad-driver.cpp and saw that the control flow is relatively abstract and complicated, with multpile constructors, classes, inheritance levels. It also depends on DispatcherThread.cpp
+            - Dispatcher.cpp and its subclass DispatcherThread.cpp
+                - provide multithreading, request-response-matching, and some report parsing. 
+                - These are at the core of the library and provide main interface for interacting with devices I think.
+                - Since these use advanced CPP features like Promises/Futures (instead of callbacks), you can't use these in simple C/Objective-C code.
+                - They manually matches responses to requests, which is relatively complicated.
+                    - This should only be necessary if responses are received out-of-order I think? Can that happen? 
+                    - I looked at the 'hidpp 2.0 draft specification' (See below) and couldn't see anything about out-of-order responses.
+                    - Only reason I can come up with for out-of-order responses: is having multiple devices attached via a Logitech Unifying Receiver and they're all being communicated with simultaneously from different threads or something? 
+                        - But even then, I'm not sure this is the best abstraction – why not provide a 'unifyingReceiverID' property and make it the user's responsibility to ensure the unifying receiver is only being interacted with from one thread?
+                        - Edit: Well, if one device responds slower than the other, then we might have a problem... Maybe the request-response matching does make sense for unifying receivers.
+                        - Edit 2: Looking at solaar's implementation at `lib > logitech_receiver > base.py > request()`, their solution actually seems more hacky and complicated than hidpp's. 
+                            Maybe we shouldn't dismiss hidpp solution so easily, cvuchener does seem to have very deep understanding of this domain.
+
+        Question: Is hidapi powerful enough to build a fully-featured hidpp driver on top? 
+            - I think so. These vendor-specific protocols seem built on top of the basic hid protocol which I think hidapi fully supports. 
+            - Solaar is also built on hidapi.
+            - Full USB protocol has some extra features, but those wouldn't work anyways when connecting devices over bluetooth I think. 
+            - See https://stackoverflow.com/questions/55272593/hidapi-vs-libusb-for-linux.
+            - @YouW said that reports from the Generic, Mouse, and Keyboard USB usage page cannot be accessed under Windows via hidapi. Is that perhaps why cvuchener/hidpp is using a custom backend?
+                Source: https://github.com/libusb/hidapi/issues/725#issuecomment-2708187965
+
+        Name ideas: 
+            - chidpp
+            - libhid-logitech
+                - Later we could make: libhid-razer
+            - libhidpp
+            - hidapi-logitech
+        
+        Most amazing thing would be if there's some Open-Source maintenance for the library.
+            - What if the libusb project adopts it, just like they did hidapi? A man can dream.
+
+    Also see:
         - This MMF issue where a user pointed me to solaar: https://github.com/noah-nuebling/mac-mouse-fix/issues/1277
+        - References linked to by the hidpp readme (https://github.com/cvuchener/hidpp/)
+            - 'hidpp 2.0 draft specification' from [2012 06 04] https://lekensteyn.nl/files/logitech/logitech_hidpp_2.0_specification_draft_2012-06-04.pdf
 */
 
 #include "RawDevice.h"
