@@ -117,6 +117,7 @@
                 - It seems like a pretty 'complete' implementation that is better than our implementation in every way. 
                     - E.g. we planned to replace the `lookBackThreshold` system with an inputReportQueue, and they've already implemented that. [Mar 2025]
                     - E.g. they have code for robustly handling device-detachment mid operation. Our code didn't consider that at all. 
+                    - E.g. hidapi lets you specify the blocking behavior of reads, as well as whether to get 'exclusive access' over the device on macOS.
         - Sidenote: I remember I tried hidapi in the very beginning of developing Mac Mouse Fix, but it always 'seized' the mice, causing them to stop working normally. However, hidapi seems to have fixed that now! (In commit https://github.com/libusb/hidapi/commit/05f05882203d10e67dbd899d8d985888ff72eca6)
 
     Other libraries
