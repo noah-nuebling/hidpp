@@ -26,12 +26,6 @@ extern "C" {
     #include <stdbool.h>
 }
 
-// Convert Cpp -> Cocoa
-
-void Utility_macos::stringToIOString(std::string string, io_string_t &ioString) {
-    strcpy(ioString, string.c_str());
-}
-
 // Convert Cocoa -> Cpp
 
 long Utility_macos::CFNumberToInt(CFNumberRef cfNumber) {
@@ -50,11 +44,11 @@ long Utility_macos::CFNumberToInt(CFNumberRef cfNumber) {
 
 std::string Utility_macos::CFStringToString(CFStringRef cfString) {
 
+    CFStringEncoding encoding = kCFStringEncodingUTF8;
 
-    CFIndex length = CFStringGetLength(cfString);
-    char buffer[length];
-
-    bool success = CFStringGetCString(cfString, buffer, length, kCFStringEncodingUTF8);
+    CFIndex bufSize = CFStringGetMaximumSizeForEncoding(CFStringGetLength(cfString), encoding);
+    char buffer[bufSize + 1];
+    bool success = CFStringGetCString(cfString, buffer, bufSize, encoding);
 
     if (!success) {
         // TODO: Throw error
@@ -176,6 +170,7 @@ std::string Utility_macos::IOHIDDeviceGetDebugIdentifier(IOHIDDeviceRef device) 
 double Utility_macos::timestamp() {
     // Src: https://stackoverflow.com/a/45465312/10601702
     // Returns seconds since January 1st 1970
+    //      Why not use CACurrentMediaTime()?
     auto now = std::chrono::system_clock::now();
     auto timeSinceEpoch = std::chrono::duration<double>(now.time_since_epoch()); // Epoch is usually January 1st 1970
     return timeSinceEpoch.count();

@@ -30,8 +30,6 @@ class Utility_macos {
 
 public:
 
-    static void stringToIOString(std::string string, io_string_t &ioString);
-
     static long CFNumberToInt(CFNumberRef cfNumber);
     static std::string CFStringToString(CFStringRef cfString);
     static std::vector<uint8_t> CFDataToByteVector(CFDataRef cfData);
