@@ -177,6 +177,18 @@
         Most amazing thing would be if there's some Open-Source maintenance for the library.
             - What if the libusb project adopts it, just like they did hidapi? A man can dream.
 
+        Library design idea: pure-report-parser [Mar 9]
+            - I think the best design would be to purely provide parsing/creation functions for HID reports that we send to/receive from the device.
+            - Then, the user would have full flexibility to decide how they wanna send/receive those reports. Be it hidapi, IOHIDDevice, or some other mechanism.
+            - Possible problems:
+                - Afaik, HIDPP responses from the device could arrive out-of-order (at least with a Logitech Unifying receiver), so reports must be programmatically matched against requests. (I believe this is what hidppp's DispatcherThread.cpp is for)
+                  Our report-only library couldn't abstract this away completely, it could only provide a function like `bool hidpp_response_matches_request(request, response)`. 
+                  Yapping:
+                    Therefore, the client application would have to do all the work of setting up an eventLoop that reads all the reports and dispatches response-reports to their request's callback, while dispatching other reports to some different destination. (Or something like that.)
+                    On the other hand, if your application either doesn't do input monitoring, or doesn't do requests, then this stuff should be simpler. 
+                    Perhaps we could add sample .c files for these patterns into the library. 
+
+
     Also see:
         - This MMF issue where a user pointed me to solaar: https://github.com/noah-nuebling/mac-mouse-fix/issues/1277
         - References linked to by the hidpp readme (https://github.com/cvuchener/hidpp/)
