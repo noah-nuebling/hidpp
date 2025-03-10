@@ -46,8 +46,8 @@ std::string Utility_macos::CFStringToString(CFStringRef cfString) {
 
     CFStringEncoding encoding = kCFStringEncodingUTF8;
 
-    CFIndex bufSize = CFStringGetMaximumSizeForEncoding(CFStringGetLength(cfString), encoding);
-    char buffer[bufSize + 1];
+    CFIndex bufSize = CFStringGetMaximumSizeForEncoding(CFStringGetLength(cfString), encoding) + 1;
+    char buffer[bufSize];
     bool success = CFStringGetCString(cfString, buffer, bufSize, encoding);
 
     if (!success) {

@@ -571,6 +571,10 @@ int RawDevice::readReport(std::vector<uint8_t> &report, int timeout) {
         }
     }
 
+    // TEST
+    if ((0))
+        usleep(0.5 * USEC_PER_SEC);
+
     if (_p->inputReportQueue.empty()) { // Listen for input if there are no reports already queued up.
 
         // Define constant
